@@ -78,7 +78,7 @@ def plotstft(audiopath, binsize=2**10, plotpath=None, colormap="jet"):
     #else:
     #    plt.show()
     #plt.clf()
-    return freq, ims
+    return ims
 
 
 def getAllAudioData(directory):
@@ -91,8 +91,9 @@ def getAllAudioData(directory):
         new_wav_file = directory[0:len(directory) - 1] + "-wav/" + filename[0:len(filename) - 4] + ".wav"
         mp3.export(new_wav_file, format="wav")
         #read wav file
+        print "ADDED " + new_wav_file
         all_audio_data.append(plotstft(new_wav_file))
     return all_audio_data
 
-edm_audio = getAllAudioData("/home/ryan/Downloads/ad-muter/test-edm-small/")
-ad_audio = getAllAudioData("/home/ryan/Downloads/ad-muter/test-commercials-small/")
+ad_audio = getAllAudioData("/home/ryan/Downloads/ad-muter/test-commercials/")
+edm_audio = getAllAudioData("/home/ryan/Downloads/ad-muter/test-edm/")
