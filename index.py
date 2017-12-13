@@ -4,6 +4,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 import scipy.io.wavfile as wav
 from numpy.lib import stride_tricks
+import math
 
 """ short time fourier transform of audio signal """
 def stft(sig, frameSize, overlapFac=0.5, window=np.hanning):
@@ -84,16 +85,47 @@ def plotstft(audiopath, binsize=2**10, plotpath=None, colormap="jet"):
 def getAllAudioData(directory):
     all_audio_data = []
     audio_filenames = os.listdir(directory)
-    for filename in audio_filenames:
+    for filename in audio_filenames[0:2]:#REMOVE THIS ARRAY INDEX
         test_audio_file_edm = directory + filename
         mp3 = pydub.AudioSegment.from_mp3(test_audio_file_edm)
-        #convert to wav
+
         new_wav_file = directory[0:len(directory) - 1] + "-wav/" + filename[0:len(filename) - 4] + ".wav"
         mp3.export(new_wav_file, format="wav")
-        #read wav file
+
         print "ADDED " + new_wav_file
         all_audio_data.append(plotstft(new_wav_file))
     return all_audio_data
 
-ad_audio = getAllAudioData("/home/ryan/Downloads/ad-muter/test-commercials/")
-edm_audio = getAllAudioData("/home/ryan/Downloads/ad-muter/test-edm/")
+def loadDataArrays(adPath, edmPath):
+    ad_audio = getAllAudioData(adPath)
+    edm_audio = getAllAudioData(edmPath)
+    return ad_audio, edm_audio
+
+def sliceAudio(songArray):
+    groupSlices = []
+    sliceWidth = 20
+    for song in songArray:
+        i = 0
+        while i < len(song) - sliceWidth:
+            groupSlices.append(song[i:i + sliceWidth])
+            i += sliceWidth
+    return groupSlices
+
+def cleanseAudioSlices(rawSlices):
+    cleansedSlices = []
+    for slice in rawSlices:
+        foundInvalidData = False
+        for slicePart in slice:
+            if float('Inf') in slicePart or -(float('Inf')) in slicePart:
+                foundInvalidData = True
+        if not foundInvalidData:
+            cleansedSlices.append(slice)
+    return cleansedSlices
+
+test_ads_path = "/home/ryan/Downloads/ad-muter/test-commercials/"
+test_edm_path = "/home/ryan/Downloads/ad-muter/test-edm/"
+ad_audio, edm_audio = loadDataArrays(test_ads_path, test_edm_path)
+ad_slices = sliceAudio(ad_audio)
+edm_slices = sliceAudio(edm_audio)
+cleansedAdSlices = cleanseAudioSlices(ad_slices)
+cleansedEdmSlices = cleanseAudioSlices(edm_slices)
