@@ -5,6 +5,7 @@ from matplotlib import pyplot as plt
 import scipy.io.wavfile as wav
 from numpy.lib import stride_tricks
 import math
+import h5py
 
 """ short time fourier transform of audio signal """
 def stft(sig, frameSize, overlapFac=0.5, window=np.hanning):
@@ -85,12 +86,12 @@ def plotstft(audiopath, binsize=2**10, plotpath=None, colormap="jet"):
 def getAllAudioData(directory):
     all_audio_data = []
     audio_filenames = os.listdir(directory)
-    for filename in audio_filenames[0:2]:#REMOVE THIS ARRAY INDEX
+    for filename in audio_filenames:#[0:2]:#REMOVE THIS ARRAY INDEX
         test_audio_file_edm = directory + filename
         mp3 = pydub.AudioSegment.from_mp3(test_audio_file_edm)
 
         new_wav_file = directory[0:len(directory) - 1] + "-wav/" + filename[0:len(filename) - 4] + ".wav"
-        mp3.export(new_wav_file, format="wav")
+        mp3.export(new_wav_file, format="wav")#should check to see if file exists first for efficiency
 
         print "ADDED " + new_wav_file
         all_audio_data.append(plotstft(new_wav_file))
@@ -122,6 +123,12 @@ def cleanseAudioSlices(rawSlices):
             cleansedSlices.append(slice)
     return cleansedSlices
 
+def getFlattenedSlices(cleansedSlices):
+    flattenedSlices = []
+    for slicesList in cleansedSlices:
+        flattenedSlices.append([sound for subSlice in slicesList for sound in subSlice])
+    return flattenedSlices
+
 test_ads_path = "/home/ryan/Downloads/ad-muter/test-commercials/"
 test_edm_path = "/home/ryan/Downloads/ad-muter/test-edm/"
 ad_audio, edm_audio = loadDataArrays(test_ads_path, test_edm_path)
@@ -129,3 +136,10 @@ ad_slices = sliceAudio(ad_audio)
 edm_slices = sliceAudio(edm_audio)
 cleansedAdSlices = cleanseAudioSlices(ad_slices)
 cleansedEdmSlices = cleanseAudioSlices(edm_slices)
+flattenedAdSlices = np.array(getFlattenedSlices(cleansedAdSlices))
+flattenedEdmSlices = np.array(getFlattenedSlices(cleansedEdmSlices))
+
+musicDataSet = h5py.File("ads.hdf5", "w")
+musicDataSet.create_dataset("ads", flattenedAdSlices.shape, dtype='f')
+musicDataSet.create_dataset("edm", flattenedEdmSlices.shape, dtype='f')
+musicDataSet.close()
