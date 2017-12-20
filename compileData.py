@@ -123,23 +123,34 @@ def cleanseAudioSlices(rawSlices):
             cleansedSlices.append(slice)
     return cleansedSlices
 
-def getFlattenedSlices(cleansedSlices):
+def getFlattenedSlices(cleansedSlices, labelNumber):
     flattenedSlices = []
+    labels = []
     for slicesList in cleansedSlices:
-        flattenedSlices.append([sound for subSlice in slicesList for sound in subSlice])
-    return flattenedSlices
+        flattenedSlices.append(slicesList)
+        labels.append(labelNumber)
+    return flattenedSlices, labels
 
 test_ads_path = "/home/ryan/Downloads/ad-muter/test-commercials/"
 test_edm_path = "/home/ryan/Downloads/ad-muter/test-edm/"
 ad_audio, edm_audio = loadDataArrays(test_ads_path, test_edm_path)
 ad_slices = sliceAudio(ad_audio)
 edm_slices = sliceAudio(edm_audio)
+del ad_audio
+del edm_audio
 cleansedAdSlices = cleanseAudioSlices(ad_slices)
 cleansedEdmSlices = cleanseAudioSlices(edm_slices)
-flattenedAdSlices = np.array(getFlattenedSlices(cleansedAdSlices))
-flattenedEdmSlices = np.array(getFlattenedSlices(cleansedEdmSlices))
+del ad_slices
+del edm_slices
+flattenedAdSlices, adLabels = getFlattenedSlices(np.array(cleansedAdSlices), 0)
+flattenedEdmSlices, edmLabels = getFlattenedSlices(np.array(cleansedEdmSlices), 1)
+del cleansedAdSlices
+del cleansedEdmSlices
 
-musicDataSet = h5py.File("ads.hdf5", "w")
-musicDataSet.create_dataset("ads", flattenedAdSlices.shape, dtype='f')
-musicDataSet.create_dataset("edm", flattenedEdmSlices.shape, dtype='f')
+allSlices = np.concatenate((flattenedAdSlices, flattenedEdmSlices), axis=0)
+allLabels = np.concatenate((adLabels, edmLabels), axis=0)
+
+musicDataSet = h5py.File("musicData.hdf5", "w")
+musicDataSet.create_dataset("allSlices", allSlices.shape, dtype='f', data=allSlices)
+musicDataSet.create_dataset("allLabels", allLabels.shape, dtype='i', data=allLabels)
 musicDataSet.close()
