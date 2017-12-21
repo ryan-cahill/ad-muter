@@ -123,14 +123,18 @@ def cleanseAudioSlices(rawSlices):
             cleansedSlices.append(slice)
     return cleansedSlices
 
-def getFlattenedSlices(cleansedSlices, labelNumber):
+def getFlattenedSlices(cleansedSlices, labelNumber, totalClasses):
     flattenedSlices = []
     labels = []
     for slicesList in cleansedSlices:
-        flattenedSlices.append(slicesList)
-        labels.append(labelNumber)
+        flattenedSlices.append(slicesList.reshape(slicesList.shape[0], slicesList.shape[1], 1))
+
+        oneHotLabel = np.zeros(totalClasses)
+        oneHotLabel[labelNumber] = 1
+        labels.append(oneHotLabel)
     return flattenedSlices, labels
 
+TOTAL_CLASSES = 2
 test_ads_path = "/home/ryan/Downloads/ad-muter/test-commercials/"
 test_edm_path = "/home/ryan/Downloads/ad-muter/test-edm/"
 ad_audio, edm_audio = loadDataArrays(test_ads_path, test_edm_path)
@@ -142,8 +146,8 @@ cleansedAdSlices = cleanseAudioSlices(ad_slices)
 cleansedEdmSlices = cleanseAudioSlices(edm_slices)
 del ad_slices
 del edm_slices
-flattenedAdSlices, adLabels = getFlattenedSlices(np.array(cleansedAdSlices), 0)
-flattenedEdmSlices, edmLabels = getFlattenedSlices(np.array(cleansedEdmSlices), 1)
+flattenedAdSlices, adLabels = getFlattenedSlices(np.array(cleansedAdSlices), 0, TOTAL_CLASSES)
+flattenedEdmSlices, edmLabels = getFlattenedSlices(np.array(cleansedEdmSlices), 1, TOTAL_CLASSES)
 del cleansedAdSlices
 del cleansedEdmSlices
 
