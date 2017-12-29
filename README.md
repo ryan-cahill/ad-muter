@@ -1,2 +1,2 @@
 # is-it-a-banger
-Yes, I would in fact rather spend hours building software than pay $3 a month to make ads go away
+![Is it a banger?](https://media.giphy.com/media/FbTdwHWcn1r2M/giphy.gif)
