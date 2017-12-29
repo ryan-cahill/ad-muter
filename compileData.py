@@ -6,6 +6,7 @@ import scipy.io.wavfile as wav
 from numpy.lib import stride_tricks
 import math
 import h5py
+import gc
 
 """ short time fourier transform of audio signal """
 def stft(sig, frameSize, overlapFac=0.5, window=np.hanning):
@@ -85,76 +86,78 @@ def plotstft(audiopath, binsize=2**10, plotpath=None, colormap="jet"):
 
 def getAllAudioData(directory):
     all_audio_data = []
+    allMaximums = []
     audio_filenames = os.listdir(directory)
     for filename in audio_filenames:#[0:2]:#REMOVE THIS ARRAY INDEX
-        test_audio_file_edm = directory + filename
-        mp3 = pydub.AudioSegment.from_mp3(test_audio_file_edm)
-
         new_wav_file = directory[0:len(directory) - 1] + "-wav/" + filename[0:len(filename) - 4] + ".wav"
-        mp3.export(new_wav_file, format="wav")#should check to see if file exists first for efficiency
+
+        if not os.path.isfile(new_wav_file):
+            test_audio_file_edm = directory + filename
+            mp3 = pydub.AudioSegment.from_mp3(test_audio_file_edm)
+            mp3.export(new_wav_file, format="wav")#should check to see if file exists first for efficiency
 
         print "ADDED " + new_wav_file
-        all_audio_data.append(plotstft(new_wav_file))
-    return all_audio_data
+        audioData = plotstft(new_wav_file)
+        all_audio_data.append(audioData)
 
-def loadDataArrays(adPath, edmPath):
-    ad_audio = getAllAudioData(adPath)
-    edm_audio = getAllAudioData(edmPath)
-    return ad_audio, edm_audio
+        allMaximums.append(audioData.max(axis=1))
+        distilledMaximums = []
+        for maximum in allMaximums:
+            distilledMaximums.append(maximum.max(axis=0))
+        fullMaximum = np.array(distilledMaximums).max(axis=0)
+    return all_audio_data, fullMaximum
 
 def sliceAudio(songArray):
-    groupSlices = []
+    groupSlices = np.array([])
     sliceWidth = 200
     for song in songArray:
-        i = 0
-        while i < len(song) - sliceWidth:
-            groupSlices.append(song[i:i + sliceWidth])
-            i += sliceWidth
+        lengthToUse = len(song) - (len(song) % sliceWidth)
+        song = song[0:lengthToUse]
+        if len(groupSlices) == 0:
+            groupSlices = np.split(song, len(song) / sliceWidth)
+        else:
+            groupSlices = np.concatenate((groupSlices, np.split(song, len(song) / sliceWidth)), axis=0)
     return groupSlices
 
 def cleanseAudioSlices(rawSlices):
-    cleansedSlices = []
-    for slice in rawSlices:
-        foundInvalidData = False
-        for slicePart in slice:
-            if float('Inf') in slicePart or -(float('Inf')) in slicePart:
-                foundInvalidData = True
-        if not foundInvalidData:
-            cleansedSlices.append(slice)
-    return cleansedSlices
+    rawSlices[rawSlices == float('inf')] = 0
+    rawSlices[rawSlices == float('-inf')] = 0
 
-def getFlattenedSlices(cleansedSlices, labelNumber, totalClasses):
+    return rawSlices
+
+def getFlattenedSlices(cleansedSlices, oneHotLabel):
     flattenedSlices = []
     labels = []
     for slicesList in cleansedSlices:
         flattenedSlices.append(slicesList.reshape(slicesList.shape[0], slicesList.shape[1], 1))
-
-        oneHotLabel = np.zeros(totalClasses)
-        oneHotLabel[labelNumber] = 1
         labels.append(oneHotLabel)
     return flattenedSlices, labels
 
 TOTAL_CLASSES = 2
 test_ads_path = "/home/ryan/Downloads/ad-muter/test-commercials/"
 test_edm_path = "/home/ryan/Downloads/ad-muter/test-edm/"
-ad_audio, edm_audio = loadDataArrays(test_ads_path, test_edm_path)
-ad_slices = sliceAudio(ad_audio)
-edm_slices = sliceAudio(edm_audio)
-del ad_audio
-del edm_audio
-cleansedAdSlices = cleanseAudioSlices(ad_slices)
-cleansedEdmSlices = cleanseAudioSlices(edm_slices)
-del ad_slices
-del edm_slices
-flattenedAdSlices, adLabels = getFlattenedSlices(np.array(cleansedAdSlices), 0, TOTAL_CLASSES)
-flattenedEdmSlices, edmLabels = getFlattenedSlices(np.array(cleansedEdmSlices), 1, TOTAL_CLASSES)
-del cleansedAdSlices
-del cleansedEdmSlices
+ad_audio, adMaximum = getAllAudioData(test_ads_path)
+edm_audio, edmMaximum = getAllAudioData(test_edm_path)
+ad_slices = sliceAudio(np.asarray(ad_audio))
+edm_slices = sliceAudio(np.asarray(edm_audio))
 
-allSlices = np.concatenate((flattenedAdSlices, flattenedEdmSlices), axis=0)
+cleansedAdSlices = cleanseAudioSlices(np.asarray(ad_slices))
+cleansedEdmSlices = cleanseAudioSlices(np.asarray(edm_slices))
+
+oneHotLabelAd = np.zeros(2)
+oneHotLabelAd[0] = 1
+flattenedAdSlices, adLabels = getFlattenedSlices(np.array(cleansedAdSlices), oneHotLabelAd)
+oneHotLabelEdm = np.zeros(2)
+oneHotLabelEdm[1] = 1
+flattenedEdmSlices, edmLabels = getFlattenedSlices(np.asarray(cleansedEdmSlices), oneHotLabelEdm)
+
+normalizedEdmSlices = np.asarray(flattenedEdmSlices) / edmMaximum
+normalizedAdSlices = np.asarray(flattenedAdSlices) / adMaximum
+
+allSlices = np.concatenate((normalizedAdSlices, normalizedEdmSlices), axis=0)
 allLabels = np.concatenate((adLabels, edmLabels), axis=0)
 
-musicDataSet = h5py.File("musicData.hdf5", "w")
+musicDataSet = h5py.File("musicData.hdf5", "w", libver="latest")
 musicDataSet.create_dataset("allSlices", allSlices.shape, dtype='f', data=allSlices)
 musicDataSet.create_dataset("allLabels", allLabels.shape, dtype='i', data=allLabels)
 musicDataSet.close()
