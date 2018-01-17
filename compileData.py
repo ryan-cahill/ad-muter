@@ -61,12 +61,12 @@ def plotstft(audiopath, binsize=2**10, plotpath=None, colormap="jet"):
     return ims
 
 
-def getAllAudioData(directory):
+def get_all_audio_data(directory):
     all_audio_data = []
-    allMaximums = []
+    all_maximums = []
     audio_filenames = os.listdir(directory)
-    maxFilesLoaded = 100
-    for filename in audio_filenames[0:(len(audio_filenames), maxFilesLoaded)[len(audio_filenames) >= maxFilesLoaded]]:#REMOVE THIS ARRAY INDEX
+    max_files_loaded = 100
+    for filename in audio_filenames[0:(len(audio_filenames), max_files_loaded)[len(audio_filenames) >= max_files_loaded]]:#REMOVE THIS ARRAY INDEX
         new_wav_file = directory[0:len(directory) - 1] + "-wav/" + filename[0:len(filename) - 4] + ".wav"
 
         if not os.path.isfile(new_wav_file):
@@ -75,29 +75,29 @@ def getAllAudioData(directory):
             mp3.export(new_wav_file, format="wav")
 
         print "ADDED " + new_wav_file
-        audioData = plotstft(new_wav_file)
+        audio_data = plotstft(new_wav_file)
 
-        audioData[audioData == float('inf')] = 0
-        audioData[audioData == float('-inf')] = 0
+        audio_data[audio_data == float('inf')] = 0
+        audio_data[audio_data == float('-inf')] = 0
 
-        all_audio_data.append(audioData)
+        all_audio_data.append(audio_data)
 
-        allMaximums.append(audioData.max(axis=1))
-        distilledMaximums = []
-        for maximum in allMaximums:
-            distilledMaximums.append(maximum.max(axis=0))
-        fullMaximum = np.array(distilledMaximums).max(axis=0)
-    return np.asarray(all_audio_data), fullMaximum
+        all_maximums.append(audio_data.max(axis=1))
+        distilled_maximums = []
+        for maximum in all_maximums:
+            distilled_maximums.append(maximum.max(axis=0))
+        full_maximum = np.array(distilled_maximums).max(axis=0)
+    return np.asarray(all_audio_data), full_maximum
 
 test_ads_path = "/home/ryan/Downloads/ad-muter/test-commercials/"
 test_edm_path = "/home/ryan/Downloads/ad-muter/test-edm/"
-ad_audio, adMaximum = getAllAudioData(test_ads_path)
-edm_audio, edmMaximum = getAllAudioData(test_edm_path)
+ad_audio, ad_maximum = get_all_audio_data(test_ads_path)
+edm_audio, edm_maximum = get_all_audio_data(test_edm_path)
 
-extraData = {"adMaximum": adMaximum, "edmMaximum": edmMaximum}
+extra_data = {"adMaximum": ad_maximum, "edmMaximum": edm_maximum}
 with open('adAudio.pickle', 'wb') as handle:
     pickle.dump(ad_audio, handle, protocol=pickle.HIGHEST_PROTOCOL)
 with open('edmAudio.pickle', 'wb') as handle:
     pickle.dump(edm_audio, handle, protocol=pickle.HIGHEST_PROTOCOL)
 with open('extraData.pickle', 'wb') as handle:
-    pickle.dump(extraData, handle, protocol=pickle.HIGHEST_PROTOCOL)
+    pickle.dump(extra_data, handle, protocol=pickle.HIGHEST_PROTOCOL)
