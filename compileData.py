@@ -6,6 +6,7 @@ import scipy.io.wavfile as wav
 from numpy.lib import stride_tricks
 import math
 import h5py
+import pickle
 import gc
 
 """ short time fourier transform of audio signal """
@@ -59,28 +60,6 @@ def plotstft(audiopath, binsize=2**10, plotpath=None, colormap="jet"):
 
     sshow, freq = logscale_spec(s, factor=1.0, sr=samplerate)
     ims = 20.*np.log10(np.abs(sshow)/10e-6) # amplitude to decibel (non-complex sshow)
-
-    #timebins, freqbins = np.shape(ims)
-
-    #plt.figure(figsize=(15, 7.5))
-    #plt.imshow(np.transpose(ims), origin="lower", aspect="auto", cmap=colormap, interpolation="none")
-    #plt.colorbar()
-
-    #plt.xlabel("time (s)")
-    #plt.ylabel("frequency (hz)")
-    #plt.xlim([0, timebins-1])
-    #plt.ylim([0, freqbins])
-
-    #xlocs = np.float32(np.linspace(0, timebins-1, 5))
-    #plt.xticks(xlocs, ["%.02f" % l for l in ((xlocs*len(samples)/timebins)+(0.5*binsize))/samplerate])
-    #ylocs = np.int16(np.round(np.linspace(0, freqbins-1, 10)))
-    #plt.yticks(ylocs, ["%.02f" % freq[i] for i in ylocs])
-
-    #if plotpath:
-    #    plt.savefig(plotpath, bbox_inches="tight")
-    #else:
-    #    plt.show()
-    #plt.clf()
     return ims
 
 
@@ -88,16 +67,21 @@ def getAllAudioData(directory):
     all_audio_data = []
     allMaximums = []
     audio_filenames = os.listdir(directory)
-    for filename in audio_filenames:#[0:2]:#REMOVE THIS ARRAY INDEX
+    maxFilesLoaded = 100
+    for filename in audio_filenames[0:(len(audio_filenames), maxFilesLoaded)[len(audio_filenames) >= maxFilesLoaded]]:#REMOVE THIS ARRAY INDEX
         new_wav_file = directory[0:len(directory) - 1] + "-wav/" + filename[0:len(filename) - 4] + ".wav"
 
         if not os.path.isfile(new_wav_file):
             test_audio_file_edm = directory + filename
             mp3 = pydub.AudioSegment.from_mp3(test_audio_file_edm)
-            mp3.export(new_wav_file, format="wav")#should check to see if file exists first for efficiency
+            mp3.export(new_wav_file, format="wav")
 
         print "ADDED " + new_wav_file
         audioData = plotstft(new_wav_file)
+
+        audioData[audioData == float('inf')] = 0
+        audioData[audioData == float('-inf')] = 0
+
         all_audio_data.append(audioData)
 
         allMaximums.append(audioData.max(axis=1))
@@ -105,7 +89,7 @@ def getAllAudioData(directory):
         for maximum in allMaximums:
             distilledMaximums.append(maximum.max(axis=0))
         fullMaximum = np.array(distilledMaximums).max(axis=0)
-    return all_audio_data, fullMaximum
+    return np.asarray(all_audio_data), fullMaximum
 
 def sliceAudio(songArray):
     groupSlices = np.array([])
@@ -119,12 +103,6 @@ def sliceAudio(songArray):
             groupSlices = np.concatenate((groupSlices, np.split(song, len(song) / sliceWidth)), axis=0)
     return groupSlices
 
-def cleanseAudioSlices(rawSlices):
-    rawSlices[rawSlices == float('inf')] = 0
-    rawSlices[rawSlices == float('-inf')] = 0
-
-    return rawSlices
-
 def getFlattenedSlices(cleansedSlices, oneHotLabel):
     flattenedSlices = []
     labels = []
@@ -133,31 +111,32 @@ def getFlattenedSlices(cleansedSlices, oneHotLabel):
         labels.append(oneHotLabel)
     return flattenedSlices, labels
 
-TOTAL_CLASSES = 2
+#TOTAL_CLASSES = 2
 test_ads_path = "/home/ryan/Downloads/ad-muter/test-commercials/"
 test_edm_path = "/home/ryan/Downloads/ad-muter/test-edm/"
 ad_audio, adMaximum = getAllAudioData(test_ads_path)
 edm_audio, edmMaximum = getAllAudioData(test_edm_path)
-ad_slices = sliceAudio(np.asarray(ad_audio))
-edm_slices = sliceAudio(np.asarray(edm_audio))
 
-cleansedAdSlices = cleanseAudioSlices(np.asarray(ad_slices))
-cleansedEdmSlices = cleanseAudioSlices(np.asarray(edm_slices))
+'''ad_slices = sliceAudio(np.asarray(ad_audio))
+edm_slices = sliceAudio(np.asarray(edm_audio))
 
 oneHotLabelAd = np.zeros(2)
 oneHotLabelAd[0] = 1
-flattenedAdSlices, adLabels = getFlattenedSlices(np.array(cleansedAdSlices), oneHotLabelAd)
+flattenedAdSlices, adLabels = getFlattenedSlices(np.array(ad_slices), oneHotLabelAd)
 oneHotLabelEdm = np.zeros(2)
 oneHotLabelEdm[1] = 1
-flattenedEdmSlices, edmLabels = getFlattenedSlices(np.asarray(cleansedEdmSlices), oneHotLabelEdm)
+flattenedEdmSlices, edmLabels = getFlattenedSlices(np.asarray(edm_slices), oneHotLabelEdm)
 
 normalizedEdmSlices = np.asarray(flattenedEdmSlices) / edmMaximum
 normalizedAdSlices = np.asarray(flattenedAdSlices) / adMaximum
 
 allSlices = np.concatenate((normalizedAdSlices, normalizedEdmSlices), axis=0)
-allLabels = np.concatenate((adLabels, edmLabels), axis=0)
+allLabels = np.concatenate((adLabels, edmLabels), axis=0)'''
 
-musicDataSet = h5py.File("musicData.hdf5", "w", libver="latest")
-musicDataSet.create_dataset("allSlices", allSlices.shape, dtype='f', data=allSlices)
-musicDataSet.create_dataset("allLabels", allLabels.shape, dtype='i', data=allLabels)
-musicDataSet.close()
+extraData = {"adMaximum": adMaximum, "edmMaximum": edmMaximum}
+with open('adAudio.pickle', 'wb') as handle:
+    pickle.dump(ad_audio, handle, protocol=pickle.HIGHEST_PROTOCOL)
+with open('edmAudio.pickle', 'wb') as handle:
+    pickle.dump(edm_audio, handle, protocol=pickle.HIGHEST_PROTOCOL)
+with open('extraData.pickle', 'wb') as handle:
+    pickle.dump(extraData, handle, protocol=pickle.HIGHEST_PROTOCOL)

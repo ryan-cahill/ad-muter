@@ -1,14 +1,75 @@
-import h5py
+#if no cuda, run 'sudo ldconfig /usr/local/cuda/lib64'
+import pickle
 import tflearn
 from tflearn.layers.core import input_data, dropout, fully_connected
 from tflearn.layers.conv import conv_2d, max_pool_2d
 from tflearn.layers.estimator import regression
 import tensorflow as tf
+import numpy as np
+import gc
 
-musicDataSetExtracted = h5py.File("musicData.hdf5", "r")
-extractedSlices = musicDataSetExtracted["allSlices"][:]
-extractedLabels = musicDataSetExtracted["allLabels"][:]
-musicDataSetExtracted.close()
+def sliceAudio(songArray):
+    sliceWidth = 200
+    totalSlices = 0
+    for song in songArray:
+        lengthToUse = len(song) - (len(song) % sliceWidth)
+        totalSlices += lengthToUse / sliceWidth
+
+    groupSlices = np.zeros((totalSlices, sliceWidth, songArray[0].shape[1]), dtype=float)
+    arrayIndex = 0
+    for song in songArray:
+        lengthToUse = len(song) - (len(song) % sliceWidth)
+        song = song[0:lengthToUse]
+        splitParts = np.split(song, len(song) / sliceWidth)
+        groupSlices[arrayIndex:arrayIndex + len(splitParts)] = splitParts
+        arrayIndex += len(splitParts)
+    return groupSlices
+
+def getFlattenedSlices(cleansedSlices, oneHotLabel):
+    flattenedSlices = []
+    labels = []
+    for slicesList in cleansedSlices:
+        flattenedSlices.append(slicesList.reshape(slicesList.shape[0], slicesList.shape[1], 1))
+        labels.append(oneHotLabel)
+    return flattenedSlices, labels
+
+#########################################################################
+
+edmAudio = []
+adAudio = []
+extraData = []
+with open('edmAudio.pickle', 'rb') as file:
+    edmAudio = pickle.load(file)
+with open('adAudio.pickle', 'rb') as file:
+    adAudio = pickle.load(file)
+with open('extraData.pickle', 'rb') as file:
+    extraData = pickle.load(file)
+
+ad_slices = sliceAudio(np.asarray(adAudio))
+edm_slices = sliceAudio(np.asarray(edmAudio))
+
+oneHotLabelAd = np.zeros(2)
+oneHotLabelAd[0] = 1
+flattenedAdSlices, adLabels = getFlattenedSlices(np.array(ad_slices), oneHotLabelAd)
+oneHotLabelEdm = np.zeros(2)
+oneHotLabelEdm[1] = 1
+flattenedEdmSlices, edmLabels = getFlattenedSlices(np.asarray(edm_slices), oneHotLabelEdm)
+
+del edmAudio
+del adAudio
+del ad_slices
+del edm_slices
+gc.collect()
+
+normalizedEdmSlices = np.asarray(flattenedEdmSlices) / extraData['edmMaximum']
+normalizedAdSlices = np.asarray(flattenedAdSlices) / extraData['adMaximum']
+
+del flattenedEdmSlices
+del flattenedAdSlices
+gc.collect()
+
+allSlices = np.concatenate((normalizedAdSlices, normalizedEdmSlices), axis=0)
+allLabels = np.concatenate((adLabels, edmLabels), axis=0)
 
 ##########################################################################
 
@@ -30,7 +91,7 @@ with tf.device('/gpu:0'):
     tflearn.config.init_graph(gpu_memory_fraction=0.9)
 
     # Building convolutional network
-    network = input_data(shape=[None, extractedSlices[0].shape[0], extractedSlices[0].shape[1], 1], name='input')
+    network = input_data(shape=[None, allSlices[0].shape[0], allSlices[0].shape[1], 1], name='input')
     network = conv_2d(network, CONVOLUTION1_DEPTH, 1, activation='relu', regularizer="L2")
     network = max_pool_2d(network, CONVOLUTION1_KERNEL_SIZE)
     network = conv_2d(network, CONVOLUTION2_DEPTH, 1, activation='relu', regularizer="L2")
@@ -43,5 +104,5 @@ with tf.device('/gpu:0'):
 
     # Training the auto encoder
     model = tflearn.DNN(network, tensorboard_verbose=0)
-    model.fit({'input': extractedSlices}, {'target': extractedLabels}, n_epoch=NUM_TRAINING_STEPS, batch_size=BATCH_SIZE, validation_set=0.1,
+    model.fit({'input': allSlices}, {'target': allLabels}, n_epoch=NUM_TRAINING_STEPS, batch_size=BATCH_SIZE, validation_set=0.1,
               snapshot_step=SNAPSHOT_STEPS, show_metric=True, run_id='classifier')
