@@ -5,9 +5,7 @@ from matplotlib import pyplot as plt
 import scipy.io.wavfile as wav
 from numpy.lib import stride_tricks
 import math
-import h5py
 import pickle
-import gc
 
 """ short time fourier transform of audio signal """
 def stft(sig, frameSize, overlapFac=0.5, window=np.hanning):
@@ -91,47 +89,10 @@ def getAllAudioData(directory):
         fullMaximum = np.array(distilledMaximums).max(axis=0)
     return np.asarray(all_audio_data), fullMaximum
 
-def sliceAudio(songArray):
-    groupSlices = np.array([])
-    sliceWidth = 200
-    for song in songArray:
-        lengthToUse = len(song) - (len(song) % sliceWidth)
-        song = song[0:lengthToUse]
-        if len(groupSlices) == 0:
-            groupSlices = np.split(song, len(song) / sliceWidth)
-        else:
-            groupSlices = np.concatenate((groupSlices, np.split(song, len(song) / sliceWidth)), axis=0)
-    return groupSlices
-
-def getFlattenedSlices(cleansedSlices, oneHotLabel):
-    flattenedSlices = []
-    labels = []
-    for slicesList in cleansedSlices:
-        flattenedSlices.append(slicesList.reshape(slicesList.shape[0], slicesList.shape[1], 1))
-        labels.append(oneHotLabel)
-    return flattenedSlices, labels
-
-#TOTAL_CLASSES = 2
 test_ads_path = "/home/ryan/Downloads/ad-muter/test-commercials/"
 test_edm_path = "/home/ryan/Downloads/ad-muter/test-edm/"
 ad_audio, adMaximum = getAllAudioData(test_ads_path)
 edm_audio, edmMaximum = getAllAudioData(test_edm_path)
-
-'''ad_slices = sliceAudio(np.asarray(ad_audio))
-edm_slices = sliceAudio(np.asarray(edm_audio))
-
-oneHotLabelAd = np.zeros(2)
-oneHotLabelAd[0] = 1
-flattenedAdSlices, adLabels = getFlattenedSlices(np.array(ad_slices), oneHotLabelAd)
-oneHotLabelEdm = np.zeros(2)
-oneHotLabelEdm[1] = 1
-flattenedEdmSlices, edmLabels = getFlattenedSlices(np.asarray(edm_slices), oneHotLabelEdm)
-
-normalizedEdmSlices = np.asarray(flattenedEdmSlices) / edmMaximum
-normalizedAdSlices = np.asarray(flattenedAdSlices) / adMaximum
-
-allSlices = np.concatenate((normalizedAdSlices, normalizedEdmSlices), axis=0)
-allLabels = np.concatenate((adLabels, edmLabels), axis=0)'''
 
 extraData = {"adMaximum": adMaximum, "edmMaximum": edmMaximum}
 with open('adAudio.pickle', 'wb') as handle:
